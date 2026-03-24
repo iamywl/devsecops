@@ -35,8 +35,8 @@ MacBook Pro (M4 Max, 128GB RAM)
 │   ├── prod-worker1 ────┤ prod 클러스터 (Gatekeeper, Sealed Secrets, Velero, Harbor)
 │   └── prod-worker2 ────┘
 │
-├── CI/CD Pipeline (GitHub Actions → Jenkins → ArgoCD)
-│   └── Lint → Test → Trivy Scan → Build → Deploy (dev → staging → prod)
+├── CI/CD Pipeline (Jenkins → ArgoCD, platform 클러스터에서 실행)
+│   └── Lint → Test → Trivy Scan → Build → Push to Harbor → ArgoCD Sync
 │
 └── DevSecOps Layers
     ├── Trivy Operator (이미지 취약점 지속 스캔)
@@ -206,8 +206,6 @@ devsecops/
 │   └── monitoring/                    # Prometheus 알럿 규칙
 ├── ci/
 │   └── argocd-app.yml                 # ArgoCD Application (GitOps)
-├── .github/workflows/
-│   └── ci.yml                         # GitHub Actions CI 파이프라인
 ├── scripts/
 │   ├── setup.sh                       # 환경 구성 (VM 시작 → 보안 도구 배포)
 │   ├── status.sh                      # 4-클러스터 상태 확인

@@ -116,6 +116,32 @@ tart list
 tart --version && kubectl version --client && terraform --version && ansible --version && trivy --version && helm version
 ```
 
+<details>
+<summary>도구가 설치되어 있지 않은 경우 (클릭하여 펼치기)</summary>
+
+```bash
+# tart (Apple Silicon VM 관리)
+brew install cirruslabs/cli/tart
+
+# Kubernetes 도구
+brew install kubectl helm
+
+# IaC
+brew install hashicorp/tap/terraform
+brew install ansible
+
+# 보안 스캔
+brew install trivy
+
+# VM SSH 자동화
+brew install sshpass
+
+# 대시보드 개발
+brew install node
+```
+
+</details>
+
 ---
 
 ## 사용법

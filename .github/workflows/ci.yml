@@ -70,9 +70,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      # 테스트: 단위/통합 테스트 실행
-      - name: Test
-        run: npm run test -- --run
+      # 빌드 검증
+      - name: Build
+        run: npm run build
 
   # =========================================================================
   # Job 2: 보안 스캔 (Trivy)

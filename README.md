@@ -100,31 +100,20 @@ macOS 호스트
 
 ---
 
-## 사전 준비
+## 전제 조건
 
-### 필수 도구 설치 (macOS에서 실행)
-
-```bash
-brew install cirruslabs/cli/tart        # tart VM 관리
-brew install kubectl helm               # K8s 도구
-brew install hashicorp/tap/terraform    # IaC
-brew install ansible                    # 구성 관리
-brew install trivy                      # 보안 스캔
-brew install sshpass                    # VM SSH 자동화
-brew install node                       # 대시보드 개발
-```
-
-### 전제 조건
-
-이 프로젝트는 **IaC_apple_sillicon 프로젝트가 구축한 tart VM 10대**를 사용한다.
-VM이 이미 생성되어 있고, K8s 클러스터가 초기화된 상태여야 한다.
+이 프로젝트는 **IaC_apple_sillicon 프로젝트가 구축한 tart VM 10대** 위에서 동작한다.
+VM 생성, K8s 클러스터 초기화, 도구 설치는 IaC_apple_sillicon에서 이미 완료된 상태다.
 
 ```bash
-# VM 존재 확인 (macOS에서)
+# VM 존재 확인
 tart list
 # platform-master, platform-worker1, platform-worker2,
 # dev-master, dev-worker1, staging-master, staging-worker1,
 # prod-master, prod-worker1, prod-worker2 가 보여야 한다
+
+# 도구 설치 확인
+tart --version && kubectl version --client && terraform --version && ansible --version && trivy --version && helm version
 ```
 
 ---

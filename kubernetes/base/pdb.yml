@@ -1,0 +1,26 @@
+# =============================================================================
+# PodDisruptionBudget: 유지보수 중에도 최소 가용성을 보장한다
+#
+# 노드 업그레이드, 스케일다운 등으로 Pod가 퇴거(evict)될 때,
+# PDB는 "최소 몇 개는 살아있어야 한다"를 강제한다.
+#
+# 예: minAvailable: 1이면,
+#     2개 중 1개를 내릴 수는 있지만 2개를 동시에 내릴 수는 없다.
+#
+# 왜 필요한가?
+# - kubectl drain으로 노드를 비울 때 모든 Pod가 동시에 죽는 것을 방지
+# - 클러스터 업그레이드 시 서비스 중단 방지
+# - HA(High Availability) 구성의 핵심 요소
+#
+# 확인 방법:
+#   kubectl get pdb -n dev
+# =============================================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: dashboard
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: dashboard

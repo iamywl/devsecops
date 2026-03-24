@@ -1,0 +1,67 @@
+# =============================================================================
+# ArgoCD Application 정의
+#
+# ArgoCD에게 "이 Git 저장소의 이 경로를 이 클러스터에 배포하라"고 알려주는 설정이다.
+#
+# GitOps 흐름:
+# 1. 개발자가 kubernetes/overlays/dev/ 의 매니페스트를 수정하고 push
+# 2. ArgoCD가 Git 변경을 감지 (기본 3분 폴링)
+# 3. 클러스터 상태와 Git 상태를 비교
+# 4. 차이가 있으면 자동으로 동기화 (syncPolicy.automated)
+#
+# 적용:
+#   kubectl apply -f ci/argocd-app.yml
+#
+# 상태 확인:
+#   argocd app get dashboard-dev
+#   argocd app get dashboard-prod
+# =============================================================================
+
+# Dev 환경 Application
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dashboard-dev
+  namespace: argocd
+spec:
+  project: default
+
+  # Git 소스 설정
+  source:
+    # 본인의 GitHub 저장소 URL로 변경
+    repoURL: https://github.com/YOUR_USERNAME/devsecops.git
+    targetRevision: develop       # develop 브랜치를 추적
+    path: kubernetes/overlays/dev # Kustomize 경로
+
+  # 배포 대상 클러스터
+  destination:
+    server: https://kubernetes.default.svc   # 현재 클러스터
+    namespace: dev
+
+  # 동기화 정책
+  syncPolicy:
+    automated:
+      prune: true       # Git에서 삭제된 리소스를 클러스터에서도 삭제
+      selfHeal: true    # 누군가 kubectl로 직접 수정하면 Git 상태로 되돌림
+    syncOptions:
+      - CreateNamespace=true
+---
+# Prod 환경 Application
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dashboard-prod
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/YOUR_USERNAME/devsecops.git
+    targetRevision: main          # main 브랜치만 추적
+    path: kubernetes/overlays/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prod
+  syncPolicy:
+    # Prod는 자동 동기화하지 않음 (수동 승인 필요)
+    syncOptions:
+      - CreateNamespace=true

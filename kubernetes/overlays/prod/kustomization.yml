@@ -1,0 +1,47 @@
+# Prod 클러스터 (tart prod-master + prod-worker1 + prod-worker2)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: devsecops
+
+resources:
+  - ../../base
+
+labels:
+  - pairs:
+      environment: prod
+      cluster: prod
+    includeSelectors: true
+
+patches:
+  - target:
+      kind: Deployment
+      name: dashboard
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "100m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "128Mi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "500m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "512Mi"
+
+  - target:
+      kind: PodDisruptionBudget
+      name: dashboard
+    patch: |
+      - op: replace
+        path: /spec/minAvailable
+        value: 2
+
+images:
+  - name: dashboard
+    newTag: stable

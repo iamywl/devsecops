@@ -1,0 +1,26 @@
+# =============================================================================
+# Kustomize: 여러 YAML 파일을 하나로 묶어서 관리한다
+#
+# Kustomize는 kubectl에 내장되어 있다 (별도 설치 불필요).
+# base/ 에 공통 매니페스트를 두고, overlays/ 에서 환경별로 덮어쓴다.
+#
+# 구조:
+#   base/              → 공통 (이 파일)
+#   overlays/dev/      → dev 환경 커스터마이징
+#   overlays/prod/     → prod 환경 커스터마이징
+#
+# 미리보기:
+#   kubectl kustomize kubernetes/base/           # base만 렌더링
+#   kubectl kustomize kubernetes/overlays/dev/   # dev 오버레이 적용
+#
+# 적용:
+#   kubectl apply -k kubernetes/overlays/dev/
+# =============================================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - deployment.yml
+  - service.yml
+  - hpa.yml
+  - pdb.yml

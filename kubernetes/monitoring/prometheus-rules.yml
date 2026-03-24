@@ -1,0 +1,117 @@
+# =============================================================================
+# Prometheus 알럿 규칙
+#
+# Prometheus는 메트릭을 수집하고 PromQL로 조건을 평가한다.
+# 조건이 일정 시간(for) 동안 충족되면 알럿을 발생시킨다.
+#
+# 알럿 흐름:
+#   Prometheus → AlertManager → Slack/Email/Webhook
+#
+# PromQL 기본 문법:
+#   rate(http_requests_total[5m])     # 5분간 초당 요청 수
+#   sum by (pod) (...)                # Pod별 합계
+#   > 0.9                             # 임계값 비교
+#
+# 적용:
+#   kubectl apply -f kubernetes/monitoring/prometheus-rules.yml -n monitoring
+#
+# 확인:
+#   Prometheus UI → Alerts 탭에서 규칙 상태 확인
+# =============================================================================
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: app-alerts
+  namespace: monitoring
+  labels:
+    release: prometheus    # kube-prometheus-stack이 이 라벨로 규칙을 찾는다
+spec:
+  groups:
+    # -----------------------------------------------------------------------
+    # Pod 관련 알럿
+    # -----------------------------------------------------------------------
+    - name: pod-alerts
+      rules:
+        # Pod가 5분 이상 CrashLoopBackOff 상태
+        # CrashLoopBackOff = 시작 → 크래시 → 재시작 → 크래시 반복
+        - alert: PodCrashLooping
+          expr: |
+            max_over_time(kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff"}[5m]) >= 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} CrashLoopBackOff"
+            description: "5분 이상 반복 크래시 중. 로그를 확인하세요: kubectl logs {{ $labels.pod }} -n {{ $labels.namespace }}"
+
+        # Pod가 15분 이상 Pending 상태
+        # Pending = 스케줄러가 적절한 노드를 찾지 못함
+        # 원인: 리소스 부족, nodeSelector 불일치, taint/toleration 문제
+        - alert: PodStuckPending
+          expr: |
+            kube_pod_status_phase{phase="Pending"} == 1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} 15분 이상 Pending"
+            description: "kubectl describe pod {{ $labels.pod }} -n {{ $labels.namespace }} 로 원인 확인"
+
+    # -----------------------------------------------------------------------
+    # 리소스 관련 알럿
+    # -----------------------------------------------------------------------
+    - name: resource-alerts
+      rules:
+        # 컨테이너 메모리 사용률 90% 초과
+        - alert: ContainerHighMemory
+          expr: |
+            container_memory_working_set_bytes{container!=""}
+            / container_spec_memory_limit_bytes{container!=""}
+            > 0.9
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.pod }} 메모리 90% 초과"
+            description: "OOMKilled 위험. limits 조정이나 메모리 누수 점검 필요."
+
+        # 컨테이너 CPU 스로틀링 발생
+        # 스로틀링 = CPU limits에 도달하여 실행이 지연됨
+        - alert: ContainerCPUThrottling
+          expr: |
+            rate(container_cpu_cfs_throttled_periods_total[5m])
+            / rate(container_cpu_cfs_periods_total[5m])
+            > 0.5
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.pod }} CPU 50% 이상 스로틀링"
+            description: "CPU limits를 올리거나 Pod를 추가(HPA)하세요."
+
+    # -----------------------------------------------------------------------
+    # 노드 관련 알럿
+    # -----------------------------------------------------------------------
+    - name: node-alerts
+      rules:
+        # 노드 디스크 사용률 85% 초과
+        - alert: NodeDiskPressure
+          expr: |
+            (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.15
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "노드 {{ $labels.instance }} 디스크 여유 15% 미만"
+            description: "이미지 정리 필요: docker system prune, crictl rmi --prune"
+
+        # 노드 메모리 사용률 90% 초과
+        - alert: NodeHighMemory
+          expr: |
+            (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.9
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "노드 {{ $labels.instance }} 메모리 90% 초과"
+            description: "Pod 퇴거(eviction) 임박. 노드 추가 또는 리소스 조정 필요."

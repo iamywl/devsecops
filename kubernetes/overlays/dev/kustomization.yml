@@ -1,0 +1,35 @@
+# Dev 클러스터 (tart dev-master + dev-worker1)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: devsecops
+
+resources:
+  - ../../base
+
+labels:
+  - pairs:
+      environment: dev
+      cluster: dev
+    includeSelectors: true
+
+patches:
+  - target:
+      kind: Deployment
+      name: dashboard
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1
+
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: dashboard
+    patch: |
+      - op: replace
+        path: /spec/maxReplicas
+        value: 3
+
+images:
+  - name: dashboard
+    newTag: dev

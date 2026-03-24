@@ -1,0 +1,54 @@
+# =============================================================================
+# OPA Gatekeeper 정책: 특권(privileged) 컨테이너 금지
+#
+# privileged: true 컨테이너는 호스트의 모든 디바이스에 접근할 수 있다.
+# 컨테이너가 탈취되면 호스트 전체가 위험해진다.
+#
+# 왜 금지하는가?
+# - 컨테이너 격리의 의미가 없어진다
+# - 호스트 파일시스템, 네트워크, 프로세스에 무제한 접근
+# - 보안 감사에서 무조건 지적 사항
+#
+# 예외:
+# - GPU 드라이버 설치 등 특수한 경우에만 허용
+# - 이 경우 별도의 예외 정책을 작성한다
+# =============================================================================
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8sblockprivileged
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sBlockPrivileged
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8sblockprivileged
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.template.spec.containers[_]
+          container.securityContext.privileged == true
+          msg := sprintf("컨테이너 '%v'에 privileged 모드 사용 금지.", [container.name])
+        }
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.template.spec.containers[_]
+          container.securityContext.allowPrivilegeEscalation == true
+          msg := sprintf("컨테이너 '%v'에 allowPrivilegeEscalation 금지.", [container.name])
+        }
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sBlockPrivileged
+metadata:
+  name: block-privileged-containers
+spec:
+  match:
+    kinds:
+      - apiGroups: ["apps"]
+        kinds: ["Deployment"]
+    excludedNamespaces:
+      - kube-system
+      - kube-public
+      - gatekeeper-system

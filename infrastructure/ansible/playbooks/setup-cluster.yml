@@ -1,0 +1,122 @@
+# =============================================================================
+# tart 클러스터에 DevSecOps 도구를 배포하는 플레이북
+#
+# 기존 IaC_apple_sillicon이 구축한 K8s 클러스터 위에
+# 보안 스캔, 정책 엔진, 시크릿 관리 도구를 추가 설치한다.
+#
+# 실행:
+#   cd infrastructure/ansible
+#   ansible-playbook playbooks/setup-cluster.yml
+#   ansible-playbook playbooks/setup-cluster.yml --tags "trivy"
+#   ansible-playbook playbooks/setup-cluster.yml --tags "gatekeeper"
+# =============================================================================
+---
+- name: DevSecOps 보안 도구 배포
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars:
+    kubeconfig_platform: "../../kubeconfig/platform.yaml"
+    kubeconfig_dev: "../../kubeconfig/dev.yaml"
+    kubeconfig_prod: "../../kubeconfig/prod.yaml"
+
+  pre_tasks:
+    - name: kubeconfig 파일 존재 확인
+      stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ kubeconfig_platform }}"
+        - "{{ kubeconfig_dev }}"
+        - "{{ kubeconfig_prod }}"
+      register: kubeconfig_check
+
+    - name: 누락된 kubeconfig 경고
+      debug:
+        msg: "kubeconfig 없음: {{ item.item }} — 해당 클러스터 태스크를 건너뜁니다"
+      loop: "{{ kubeconfig_check.results }}"
+      when: not item.stat.exists
+
+  tasks:
+    # -----------------------------------------------------------------------
+    # Trivy Operator: 클러스터 내부에서 지속적 취약점 스캔
+    # 이미지 스캔뿐 아니라 CIS 벤치마크, RBAC 감사까지 수행한다
+    # -----------------------------------------------------------------------
+    - name: Trivy Operator Helm 레포 추가
+      command: helm repo add aquasecurity https://aquasecurity.github.io/helm-charts
+      changed_when: false
+      tags: trivy
+
+    - name: Trivy Operator 설치 (dev 클러스터)
+      command: >
+        helm upgrade --install trivy-operator aquasecurity/trivy-operator
+        --namespace trivy-system --create-namespace
+        --set trivy.ignoreUnfixed=true
+        --kubeconfig {{ kubeconfig_dev }}
+        --wait --timeout 300s
+      tags: trivy
+
+    - name: Trivy Operator 설치 (prod 클러스터)
+      command: >
+        helm upgrade --install trivy-operator aquasecurity/trivy-operator
+        --namespace trivy-system --create-namespace
+        --set trivy.ignoreUnfixed=true
+        --kubeconfig {{ kubeconfig_prod }}
+        --wait --timeout 300s
+      tags: trivy
+
+    # -----------------------------------------------------------------------
+    # OPA Gatekeeper: 정책 기반 배포 제어 (prod 클러스터)
+    # -----------------------------------------------------------------------
+    - name: Gatekeeper 설치 (prod 클러스터)
+      command: >
+        helm upgrade --install gatekeeper
+        oci://ghcr.io/open-policy-agent/gatekeeper/helm/gatekeeper
+        --namespace gatekeeper-system --create-namespace
+        --set replicas=1
+        --kubeconfig {{ kubeconfig_prod }}
+        --wait --timeout 300s
+      tags: gatekeeper
+
+    - name: Gatekeeper 정책 적용 (prod)
+      command: >
+        kubectl apply -f ../../kubernetes/policies/
+        --kubeconfig {{ kubeconfig_prod }}
+      tags: gatekeeper
+
+    # -----------------------------------------------------------------------
+    # Vault: 시크릿 중앙 관리 (platform 클러스터)
+    # -----------------------------------------------------------------------
+    - name: Vault Helm 레포 추가
+      command: helm repo add hashicorp https://helm.releases.hashicorp.com
+      changed_when: false
+      tags: vault
+
+    - name: Vault 설치 (platform 클러스터)
+      command: >
+        helm upgrade --install vault hashicorp/vault
+        --namespace vault --create-namespace
+        --set server.dev.enabled=true
+        --set server.dev.devRootToken=root
+        --set injector.enabled=true
+        --kubeconfig {{ kubeconfig_platform }}
+        --wait --timeout 300s
+      tags: vault
+
+    # -----------------------------------------------------------------------
+    # 완료 안내
+    # -----------------------------------------------------------------------
+    - name: 설치 완료 안내
+      debug:
+        msg: |
+          DevSecOps 도구 설치 완료.
+
+          Trivy Operator:
+            kubectl get vulnerabilityreports -A --kubeconfig {{ kubeconfig_dev }}
+            kubectl get vulnerabilityreports -A --kubeconfig {{ kubeconfig_prod }}
+
+          Gatekeeper 정책:
+            kubectl get constraints -A --kubeconfig {{ kubeconfig_prod }}
+
+          Vault UI (platform-worker1 NodePort):
+            kubectl port-forward svc/vault -n vault 8200:8200 --kubeconfig {{ kubeconfig_platform }}

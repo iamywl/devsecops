@@ -1,0 +1,78 @@
+# =============================================================================
+# OPA Gatekeeper 정책: 필수 라벨 강제
+#
+# 모든 Pod에 특정 라벨이 반드시 있어야 한다.
+# 라벨이 없으면 배포 자체가 거부된다.
+#
+# 왜 필요한가?
+# - 라벨 없는 Pod는 모니터링에서 누락된다
+# - "이 Pod는 누가 만들었고 어떤 서비스인가?"를 추적할 수 없다
+# - 실무에서 보안 감사 시 모든 리소스의 출처를 추적해야 한다
+#
+# Gatekeeper의 동작 방식:
+# 1. ConstraintTemplate: "어떤 검사를 할 것인가"를 Rego 언어로 정의
+# 2. Constraint: 그 검사를 "어디에 적용할 것인가"를 정의
+#
+# 테스트:
+#   # 라벨 없는 Pod 생성 시도 → 거부됨
+#   kubectl run test --image=nginx -n dev
+#
+#   # 라벨 있는 Pod → 허용됨
+#   kubectl run test --image=nginx -n dev --labels="app=test,owner=ywlee"
+# =============================================================================
+
+# Step 1: 검사 로직 정의 (ConstraintTemplate)
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequiredlabels
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sRequiredLabels
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            labels:
+              type: array
+              items:
+                type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      # Rego: OPA의 정책 언어
+      # input.review.object = 생성/수정하려는 K8s 오브젝트
+      rego: |
+        package k8srequiredlabels
+
+        violation[{"msg": msg}] {
+          provided := {label | input.review.object.metadata.labels[label]}
+          required := {label | label := input.parameters.labels[_]}
+          missing := required - provided
+          count(missing) > 0
+          msg := sprintf("필수 라벨 누락: %v", [missing])
+        }
+---
+# Step 2: 검사 적용 범위 정의 (Constraint)
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredLabels
+metadata:
+  name: require-app-label
+spec:
+  match:
+    kinds:
+      - apiGroups: ["apps"]
+        kinds: ["Deployment"]
+    # system 네임스페이스는 제외
+    excludedNamespaces:
+      - kube-system
+      - kube-public
+      - gatekeeper-system
+      - argocd
+      - monitoring
+      - vault
+  parameters:
+    labels:
+      - "app"
+      - "environment"

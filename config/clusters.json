@@ -1,0 +1,49 @@
+{
+  "base_image": "ghcr.io/cirruslabs/ubuntu:latest",
+  "ssh_user": "admin",
+  "ssh_password": "admin",
+  "clusters": [
+    {
+      "name": "platform",
+      "role": "관리/관측 클러스터 — Prometheus, Grafana, ArgoCD, Jenkins 운영",
+      "pod_cidr": "10.10.0.0/16",
+      "service_cidr": "10.96.0.0/16",
+      "nodes": [
+        { "name": "platform-master", "role": "master", "cpu": 2, "memory": 4096, "disk": 20 },
+        { "name": "platform-worker1", "role": "worker", "cpu": 3, "memory": 12288, "disk": 20 },
+        { "name": "platform-worker2", "role": "worker", "cpu": 2, "memory": 8192, "disk": 20 }
+      ]
+    },
+    {
+      "name": "dev",
+      "role": "개발 클러스터 — Istio, 데모앱, HPA, 네트워크 정책 테스트",
+      "pod_cidr": "10.20.0.0/16",
+      "service_cidr": "10.97.0.0/16",
+      "nodes": [
+        { "name": "dev-master", "role": "master", "cpu": 2, "memory": 4096, "disk": 20 },
+        { "name": "dev-worker1", "role": "worker", "cpu": 2, "memory": 8192, "disk": 20 }
+      ]
+    },
+    {
+      "name": "staging",
+      "role": "스테이징 클러스터 — 프로덕션 배포 전 검증",
+      "pod_cidr": "10.30.0.0/16",
+      "service_cidr": "10.98.0.0/16",
+      "nodes": [
+        { "name": "staging-master", "role": "master", "cpu": 2, "memory": 4096, "disk": 20 },
+        { "name": "staging-worker1", "role": "worker", "cpu": 2, "memory": 8192, "disk": 20 }
+      ]
+    },
+    {
+      "name": "prod",
+      "role": "운영 클러스터 — Sealed Secrets, Gatekeeper, Velero, Harbor",
+      "pod_cidr": "10.40.0.0/16",
+      "service_cidr": "10.99.0.0/16",
+      "nodes": [
+        { "name": "prod-master", "role": "master", "cpu": 2, "memory": 4096, "disk": 20 },
+        { "name": "prod-worker1", "role": "worker", "cpu": 2, "memory": 8192, "disk": 20 },
+        { "name": "prod-worker2", "role": "worker", "cpu": 2, "memory": 8192, "disk": 20 }
+      ]
+    }
+  ]
+}

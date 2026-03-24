@@ -1,0 +1,7 @@
+# Docker 빌드 시 제외할 파일
+# .dockerignore가 없으면 node_modules까지 COPY되어 빌드가 느려진다
+node_modules
+dist
+.git
+*.md
+.env*

@@ -1,0 +1,76 @@
+# =============================================================================
+# OPA Gatekeeper 정책: latest 태그 금지
+#
+# 컨테이너 이미지에 :latest 태그를 사용하면 안 된다.
+#
+# 왜 금지하는가?
+# - latest는 "가장 최신"이라는 뜻이지만, 실제로는 "어떤 버전인지 모른다"
+# - 어제 latest와 오늘 latest가 다를 수 있다 → 재현 불가능한 배포
+# - 장애 발생 시 "어떤 버전에서 문제가 생겼는가"를 추적할 수 없다
+# - 롤백할 때 "이전 버전이 뭐였지?"를 알 수 없다
+#
+# 올바른 방법:
+#   image: dashboard:v1.2.3        (시맨틱 버전)
+#   image: dashboard:abc1234       (커밋 해시)
+#   image: dashboard:20250324      (날짜)
+#
+# 테스트:
+#   kubectl apply -f - <<EOF
+#   apiVersion: apps/v1
+#   kind: Deployment
+#   metadata:
+#     name: test
+#     namespace: dev
+#     labels: { app: test, environment: dev }
+#   spec:
+#     selector: { matchLabels: { app: test } }
+#     template:
+#       metadata: { labels: { app: test } }
+#       spec:
+#         containers:
+#           - name: test
+#             image: nginx:latest      # ← 이것이 거부된다
+#   EOF
+# =============================================================================
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8sblocklatesttag
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sBlockLatestTag
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8sblocklatesttag
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.template.spec.containers[_]
+          endswith(container.image, ":latest")
+          msg := sprintf("이미지 '%v'에 :latest 태그 사용 금지. 명시적 버전 태그를 사용하세요.", [container.image])
+        }
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.template.spec.containers[_]
+          not contains(container.image, ":")
+          msg := sprintf("이미지 '%v'에 태그가 없습니다. 명시적 버전 태그를 지정하세요.", [container.image])
+        }
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sBlockLatestTag
+metadata:
+  name: block-latest-tag
+spec:
+  match:
+    kinds:
+      - apiGroups: ["apps"]
+        kinds: ["Deployment"]
+    excludedNamespaces:
+      - kube-system
+      - kube-public
+      - gatekeeper-system
+      - argocd
+      - monitoring
+      - vault

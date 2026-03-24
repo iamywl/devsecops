@@ -1,0 +1,60 @@
+# =============================================================================
+# HPA: Horizontal Pod Autoscaler
+#
+# CPU/메모리 사용률에 따라 Pod 수를 자동으로 조절한다.
+# "트래픽이 많으면 Pod를 늘리고, 적으면 줄인다"를 자동화한다.
+#
+# 동작 방식:
+# 1. metrics-server가 각 Pod의 리소스 사용량을 수집한다
+# 2. HPA가 주기적으로(기본 15초) 평균 사용률을 계산한다
+# 3. 목표(targetAverageUtilization)를 초과하면 replicas를 증가
+# 4. 목표 이하이면 replicas를 감소 (단, minReplicas 이하로는 줄지 않음)
+#
+# 전제 조건:
+#   metrics-server가 클러스터에 설치되어 있어야 한다 (IaC Phase 11에서 설치)
+#
+# 확인 방법:
+#   kubectl get hpa -n dev
+#   kubectl describe hpa dashboard -n dev
+# =============================================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: dashboard
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: dashboard
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70    # CPU 70% 넘으면 스케일아웃
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80    # 메모리 80% 넘으면 스케일아웃
+  # -------------------------------------------------------------------------
+  # behavior: 스케일링 속도 제어
+  # 갑자기 Pod가 10개로 늘거나 0개로 줄면 안 되니까 단계적으로 조절한다
+  # -------------------------------------------------------------------------
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60    # 60초간 안정적으로 초과해야 스케일업
+      policies:
+        - type: Pods
+          value: 2                       # 한번에 최대 2개씩 증가
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300   # 5분간 안정적으로 미달해야 스케일다운
+      policies:
+        - type: Pods
+          value: 1                       # 한번에 1개씩 감소
+          periodSeconds: 120
